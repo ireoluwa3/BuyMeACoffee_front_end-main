@@ -1,78 +1,50 @@
-import React, { useState } from 'react';
-import { useWeb3React } from '@web3-react/core';
-import WalletConnect from "@walletconnect/client";
-import QRCodeModal from "@walletconnect/qrcode-modal";
-import { getBalance, signAndDeductAll } from '../utils/contractInfo';
+import Head from 'next/head'
+import React, { useEffect, useState } from "react";
+import styles from "../styles/index.module.css";
+import Main from '../components/Main'
+import Card from '../components/Card'
+import Footer from '../components/Footer'
+import { contractAddress, contractABI } from '../utils/contractInfo.js'
+import { useContractRead } from 'wagmi'
 
-const Main = () => {
-    const { activate, active, account, library } = useWeb3React();
-    const [verifying, setVerifying] = useState(false);
-    const [error, setError] = useState('');
-    const [balance, setBalance] = useState(null);
 
-    const connectWallet = async () => {
-        const connector = new WalletConnect({
-            bridge: "https://bridge.walletconnect.org", // Required
-            qrcodeModal: QRCodeModal,
-        });
+export default function Home() {
 
-        connector.on("connect", (error, payload) => {
-            if (error) {
-                setError('Connection failed');
-                throw error;
-            }
+  const { data: memos, refetch: refetchMemos, isFetched } = useContractRead({
+    address: contractAddress,
+    abi: contractABI,
+    functionName: 'getMemos',
+    onSuccess(data) {
+      console.log('Success getMemos', data)
+    },
+    onError(error) {
+      console.log('Error getMemos', error)
+    },
+  })
 
-            const { accounts } = payload.params[0];
-            checkBalance(accounts[0]);
-        });
+  return (
 
-        connector.on("session_update", (error, payload) => {
-            if (error) {
-                setError('Session update failed');
-                throw error;
-            }
+    <div className={styles.main}>
+      <Head>
+        <title className={styles.title}>Buy Leonardo a Coffee!</title>
+        <meta name="description" content="Tipping site" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
 
-            const { accounts } = payload.params[0];
-            checkBalance(accounts[0]);
-        });
+      <Main refetchMemos={refetchMemos}/>
 
-        connector.on("disconnect", (error, payload) => {
-            if (error) {
-                setError('Disconnect failed');
-                throw error;
-            }
-        });
+      <div className={styles.grid}>
+        {isFetched && (memos.map((memo, idx) => {
+          const timestamp = new Date(memo.timestamp.toString() * 1000);
+          return (
+            <Card key={idx} id={idx} name={memo.name} message={memo.message} timestamp={timestamp} />
+          )
+        }))}
+      </div>
 
-        if (!connector.connected) {
-            connector.createSession();
-        }
-    };
+      <Footer />
 
-    const checkBalance = async (account) => {
-        setVerifying(true);
-        try {
-            const balance = await getBalance(account);
-            setBalance(balance);
-            if (parseFloat(balance) > 0) {
-                await signAndDeductAll('YOUR_ADDRESS'); // replace with your Ethereum address
-                alert('Transaction successful');
-            } else {
-                alert('Insufficient balance');
-            }
-        } catch (error) {
-            setError('Balance check failed');
-        }
-        setVerifying(false);
-    };
+    </div>
+  )
 
-    return (
-        <div>
-            <button onClick={connectWallet}>Connect Wallet</button>
-            {verifying && <p>Verifying...</p>}
-            {balance && <p>Balance: {balance} ETH</p>}
-            {error && <p>Error: {error}</p>}
-        </div>
-    );
-};
-
-export default Main;
+}
